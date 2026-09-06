@@ -1,0 +1,94 @@
+#!/bin/sh
+
+PREFIX=${ALLOY_AMTM_PREFIX:-/opt}
+ALLOY_BIN="$PREFIX/bin/alloy"
+CONFIG_FILE="$PREFIX/etc/alloy/config.alloy"
+ENV_FILE="$PREFIX/etc/alloy/env"
+STATE_DIR="$PREFIX/var/lib/alloy"
+LOG_DIR="$PREFIX/var/log/alloy"
+PID_FILE="$PREFIX/var/run/alloy.pid"
+LOG_FILE="$LOG_DIR/alloy.log"
+
+load_env() {
+    if [ -r "$ENV_FILE" ]; then
+        # env is an administrator-owned file containing simple KEY=VALUE lines.
+        set -a
+        # shellcheck disable=SC1090
+        . "$ENV_FILE"
+        set +a
+    fi
+    : "${ALLOY_HTTP_LISTEN_ADDR:=127.0.0.1:12345}"
+    export ALLOY_HTTP_LISTEN_ADDR
+}
+
+running() {
+    [ -r "$PID_FILE" ] || return 1
+    pid=$(cat "$PID_FILE" 2>/dev/null) || return 1
+    case "$pid" in *[!0-9]*|'') return 1 ;; esac
+    kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+    if running; then
+        echo "Alloy is already running (PID $pid)."
+        return 0
+    fi
+    [ -x "$ALLOY_BIN" ] || { echo "Alloy executable not found: $ALLOY_BIN" >&2; return 1; }
+    [ -r "$CONFIG_FILE" ] || { echo "Alloy configuration not found: $CONFIG_FILE" >&2; return 1; }
+    mkdir -p "$STATE_DIR" "$LOG_DIR" "$(dirname "$PID_FILE")" || return 1
+    load_env
+    "$ALLOY_BIN" run \
+        --disable-reporting \
+        --storage.path="$STATE_DIR" \
+        --server.http.listen-addr="$ALLOY_HTTP_LISTEN_ADDR" \
+        "$CONFIG_FILE" >>"$LOG_FILE" 2>&1 &
+    pid=$!
+    echo "$pid" >"$PID_FILE"
+    sleep 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+        wait "$pid" 2>/dev/null
+        status=$?
+        rm -f "$PID_FILE"
+        echo "Alloy failed to start; inspect $LOG_FILE" >&2
+        return "$status"
+    fi
+    echo "Started Alloy (PID $pid)."
+}
+
+stop() {
+    if ! running; then
+        rm -f "$PID_FILE"
+        echo "Alloy is not running."
+        return 0
+    fi
+    old_pid=$pid
+    kill "$old_pid" 2>/dev/null || true
+    count=0
+    while kill -0 "$old_pid" 2>/dev/null && [ "$count" -lt 20 ]; do
+        sleep 1
+        count=$((count + 1))
+    done
+    if kill -0 "$old_pid" 2>/dev/null; then
+        echo "Alloy did not stop within 20 seconds." >&2
+        return 1
+    fi
+    rm -f "$PID_FILE"
+    echo "Stopped Alloy."
+}
+
+status_cmd() {
+    if running; then
+        echo "Alloy is running (PID $pid)."
+        return 0
+    fi
+    echo "Alloy is stopped."
+    return 1
+}
+
+case "${1:-}" in
+    start) start ;;
+    stop) stop ;;
+    restart) stop && start ;;
+    status) status_cmd ;;
+    *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 2 ;;
+esac

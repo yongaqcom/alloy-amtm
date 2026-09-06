@@ -1,0 +1,64 @@
+#!/bin/sh
+
+PREFIX=${ALLOY_AMTM_PREFIX:-/opt}
+SERVICE="$PREFIX/etc/init.d/S99alloy"
+ALLOY="$PREFIX/bin/alloy"
+CONFIG="$PREFIX/etc/alloy/config.alloy"
+LOG="$PREFIX/var/log/alloy/alloy.log"
+INSTALL_URL=${ALLOY_AMTM_INSTALL_URL:-https://raw.githubusercontent.com/yongaqcom/alloy-amtm/main/packaging/amtm/install.sh}
+
+need_service() {
+    [ -x "$SERVICE" ] || { echo "Alloy service is not installed." >&2; exit 1; }
+}
+
+update_cmd() {
+    command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
+    update_script="${TMPDIR:-/tmp}/alloy-amtm-update.$$"
+    trap 'rm -f "$update_script"' EXIT HUP INT TERM
+    curl -fsSL "$INSTALL_URL" -o "$update_script" || exit 1
+    sh "$update_script"
+}
+
+menu() {
+    while :; do
+        echo
+        echo "Alloy for Asuswrt-Merlin"
+        echo "  1. Status"
+        echo "  2. Start"
+        echo "  3. Stop"
+        echo "  4. Restart"
+        echo "  5. Validate configuration"
+        echo "  6. Show logs"
+        echo "  7. Update"
+        echo "  8. Uninstall"
+        echo "  q. Quit"
+        printf "Selection: "
+        read -r selection || exit 0
+        case "$selection" in
+            1) "$0" status || true ;;
+            2) "$0" start ;;
+            3) "$0" stop ;;
+            4) "$0" restart ;;
+            5) "$0" validate ;;
+            6) "$0" logs ;;
+            7) "$0" update ;;
+            8) "$0" uninstall ;;
+            q|Q) exit 0 ;;
+            *) echo "Unknown selection." ;;
+        esac
+    done
+}
+
+case "${1:-menu}" in
+    menu) menu ;;
+    start|stop|restart|status) need_service; "$SERVICE" "$1" ;;
+    validate) [ -x "$ALLOY" ] && "$ALLOY" validate "$CONFIG" ;;
+    logs) [ -f "$LOG" ] && tail -n "${ALLOY_AMTM_LOG_LINES:-100}" "$LOG" || echo "No Alloy log yet." ;;
+    version) "$ALLOY" --version ;;
+    update) update_cmd ;;
+    uninstall)
+        shift
+        exec sh "$PREFIX/share/alloy-amtm/install.sh" --uninstall "$@"
+        ;;
+    *) echo "Usage: alloy-amtm {status|start|stop|restart|validate|logs|version|update|uninstall}" >&2; exit 2 ;;
+esac
