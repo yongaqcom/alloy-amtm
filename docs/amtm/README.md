@@ -1,9 +1,9 @@
 # Alloy for Asuswrt-Merlin and AMTM
 
-This fork builds a static ARM64 Grafana Alloy binary and packages it for
+This repository builds a static ARM64 Grafana Alloy binary and packages it for
 Entware's `/opt` filesystem. The initial supported router is the ASUS RT-BE88U
-running Asuswrt-Merlin. It intentionally stays close to `grafana/alloy`; router
-support is isolated in `packaging/amtm` and a dedicated GitHub Actions workflow.
+running Asuswrt-Merlin. Router support is isolated from the unmodified Alloy
+source, which is pinned in the `upstream/` Git submodule.
 
 ## Requirements
 
@@ -88,7 +88,7 @@ uploads the tarball plus `SHA256SUMS`. Tags matching `v*-amtm.*` create a GitHub
 Release.
 
 Maintainers should follow the [upstream release tracking runbook](UPSTREAM.md)
-when importing a new Grafana Alloy release.
+when updating to a new Grafana Alloy release.
 
 See [engineering findings and validation status](FINDINGS.md) for the evidence
 behind the current design and the work that still requires a physical BE88U.

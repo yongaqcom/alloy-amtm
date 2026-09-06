@@ -63,12 +63,13 @@ confirm:
 
 ## Build findings
 
-The checked-in source was initially imported from `grafana/alloy` commit
-`0dffb9f2829cf6ee5e527568e22a5ba82cb5dd5f`. The exact source base is tracked
-in [`UPSTREAM_VERSION`](../../packaging/amtm/UPSTREAM_VERSION).
+The `upstream/` submodule is initially pinned to `grafana/alloy` commit
+`0dffb9f2829cf6ee5e527568e22a5ba82cb5dd5f`. The exact source base is also
+recorded in [`UPSTREAM_VERSION`](../../packaging/amtm/UPSTREAM_VERSION).
 
-The dedicated workflow builds `collector/` directly instead of using the full
-upstream packaging target. This has two useful effects for the router build:
+The dedicated workflow builds `upstream/collector/` directly instead of using
+the full upstream packaging target. This has two useful effects for the router
+build:
 
 1. It doesn't embed the Alloy web UI. HTTP health and metrics endpoints remain,
    but browser UI assets aren't present.
