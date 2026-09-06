@@ -9,10 +9,7 @@ on:
       - '.github/workflows/build-amtm.yml'
       - 'packaging/amtm/**'
       - 'tests/amtm/**'
-      - 'collector/**'
-      - 'internal/**'
-      - 'go.mod'
-      - 'go.sum'
+      - 'upstream'
   workflow_dispatch:
 
 permissions:
@@ -27,15 +24,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: upstream/go.mod
           cache-dependency-path: |
-            go.sum
-            collector/go.sum
-            syntax/go.sum
+            upstream/go.sum
+            upstream/collector/go.sum
+            upstream/syntax/go.sum
 
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static shellcheck
@@ -45,20 +43,26 @@ jobs:
           shellcheck -s sh packaging/amtm/*.sh packaging/amtm/alloy-amtm packaging/amtm/S99alloy tests/amtm/shell_test.sh
           sh tests/amtm/shell_test.sh
 
+      - name: Resolve build version
+        id: version
+        run: |
+          version=$(sh packaging/amtm/resolve-version.sh "$GITHUB_REF_TYPE" "$GITHUB_REF_NAME" upstream/collector/VERSION)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build static ARM64 Alloy
         env:
           CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: arm64
           GOARM64: v8.0
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p build
-          revision=$(git rev-parse --short HEAD)
-          version=${GITHUB_REF_NAME:-main}
+          revision=$(git -C upstream rev-parse --short HEAD)
           build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          ldflags="-s -w -X github.com/grafana/alloy/internal/build.Branch=amtm -X github.com/grafana/alloy/internal/build.Version=$version -X github.com/grafana/alloy/syntax/internal/stdlib.Version=$version -X github.com/grafana/alloy/internal/build.Revision=$revision -X github.com/grafana/alloy/internal/build.BuildUser=github-actions -X github.com/grafana/alloy/internal/build.BuildDate=$build_date"
-          cd collector
-          go build -trimpath -tags 'netgo osusergo' -ldflags "$ldflags" -o ../build/alloy .
+          ldflags="-s -w -X github.com/grafana/alloy/internal/build.Branch=amtm -X github.com/grafana/alloy/internal/build.Version=$VERSION -X github.com/grafana/alloy/syntax/internal/stdlib.Version=$VERSION -X github.com/grafana/alloy/internal/build.Revision=$revision -X github.com/grafana/alloy/internal/build.BuildUser=github-actions -X github.com/grafana/alloy/internal/build.BuildDate=$build_date"
+          cd upstream/collector
+          go build -trimpath -tags 'netgo osusergo' -ldflags "$ldflags" -o ../../build/alloy .
 
       - name: Verify and smoke-test artifact
         run: |
@@ -72,9 +76,10 @@ jobs:
           qemu-aarch64-static build/alloy validate packaging/amtm/config.alloy
 
       - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          version=${GITHUB_REF_NAME:-main}
-          sh packaging/amtm/package.sh build/alloy "$version" dist/amtm
+          sh packaging/amtm/package.sh build/alloy "$VERSION" dist/amtm
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

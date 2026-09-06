@@ -16,6 +16,20 @@ trap cleanup EXIT HUP INT TERM
 cleanup
 mkdir -p "$PAYLOAD" "$PREFIX/bin"
 
+UPSTREAM_VERSION_FILE="$TEST_TMP/COLLECTOR_VERSION"
+printf '%s\n' '1.19.0 # x-release-please-version' >"$UPSTREAM_VERSION_FILE"
+
+[ "$(sh "$ROOT/packaging/amtm/resolve-version.sh" branch main "$UPSTREAM_VERSION_FILE")" = main ]
+[ "$(sh "$ROOT/packaging/amtm/resolve-version.sh" tag v1.19.0-amtm.1 "$UPSTREAM_VERSION_FILE")" = v1.19.0-amtm.1 ]
+if sh "$ROOT/packaging/amtm/resolve-version.sh" tag v0.1.0-amtm.1 "$UPSTREAM_VERSION_FILE" >/dev/null 2>&1; then
+    echo "A release tag without the upstream Alloy version was accepted." >&2
+    exit 1
+fi
+if sh "$ROOT/packaging/amtm/resolve-version.sh" tag v1.19.0-amtm.0 "$UPSTREAM_VERSION_FILE" >/dev/null 2>&1; then
+    echo "An invalid AMTM release revision was accepted." >&2
+    exit 1
+fi
+
 for file in alloy-amtm S99alloy config.alloy env install.sh; do
     cp "$ROOT/packaging/amtm/$file" "$PAYLOAD/$file"
 done
