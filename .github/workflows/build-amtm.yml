@@ -1,0 +1,111 @@
+name: Build AMTM artifact
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*-amtm.*']
+  pull_request:
+    paths:
+      - '.github/workflows/build-amtm.yml'
+      - 'packaging/amtm/**'
+      - 'tests/amtm/**'
+      - 'collector/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            collector/go.sum
+            syntax/go.sum
+
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static shellcheck
+
+      - name: Check router scripts
+        run: |
+          shellcheck -s sh packaging/amtm/*.sh packaging/amtm/alloy-amtm packaging/amtm/S99alloy tests/amtm/shell_test.sh
+          sh tests/amtm/shell_test.sh
+
+      - name: Build static ARM64 Alloy
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: arm64
+          GOARM64: v8.0
+        run: |
+          mkdir -p build
+          revision=$(git rev-parse --short HEAD)
+          version=${GITHUB_REF_NAME:-main}
+          build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ldflags="-s -w -X github.com/grafana/alloy/internal/build.Branch=amtm -X github.com/grafana/alloy/internal/build.Version=$version -X github.com/grafana/alloy/syntax/internal/stdlib.Version=$version -X github.com/grafana/alloy/internal/build.Revision=$revision -X github.com/grafana/alloy/internal/build.BuildUser=github-actions -X github.com/grafana/alloy/internal/build.BuildDate=$build_date"
+          cd collector
+          go build -trimpath -tags 'netgo osusergo' -ldflags "$ldflags" -o ../build/alloy .
+
+      - name: Verify and smoke-test artifact
+        run: |
+          file build/alloy | tee build/file.txt
+          grep -Eq 'ARM aarch64|ARM64' build/file.txt
+          if readelf -l build/alloy | grep -q 'Requesting program interpreter'; then
+            echo 'Artifact is dynamically linked' >&2
+            exit 1
+          fi
+          qemu-aarch64-static build/alloy --version
+          qemu-aarch64-static build/alloy validate packaging/amtm/config.alloy
+
+      - name: Package
+        run: |
+          version=${GITHUB_REF_NAME:-main}
+          sh packaging/amtm/package.sh build/alloy "$version" dist/amtm
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alloy-amtm-linux-arm64
+          path: |
+            dist/amtm/alloy-amtm-linux-arm64.tar.gz
+            dist/amtm/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: alloy-amtm-linux-arm64
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          dist/alloy-amtm-linux-arm64.tar.gz
+          dist/SHA256SUMS
+          --repo "$GITHUB_REPOSITORY"
+          --title "$GITHUB_REF_NAME"
+          --generate-notes

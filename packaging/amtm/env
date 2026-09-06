@@ -1,0 +1,7 @@
+# Runtime limits suitable for the RT-BE88U's 2 GiB RAM.
+GOMEMLIMIT=384MiB
+GOMAXPROCS=2
+GODEBUG=netdns=go
+
+# Keep the diagnostic endpoint private to the router by default.
+ALLOY_HTTP_LISTEN_ADDR=127.0.0.1:12345
