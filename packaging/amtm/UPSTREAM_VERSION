@@ -1,0 +1,4 @@
+repository=https://github.com/grafana/alloy.git
+ref=main
+commit=0dffb9f2829cf6ee5e527568e22a5ba82cb5dd5f
+imported_at=2026-09-06

@@ -87,6 +87,9 @@ under ARM64 emulation, tests the BusyBox-compatible packaging scripts, and
 uploads the tarball plus `SHA256SUMS`. Tags matching `v*-amtm.*` create a GitHub
 Release.
 
+Maintainers should follow the [upstream release tracking runbook](UPSTREAM.md)
+when importing a new Grafana Alloy release.
+
 Before declaring another router supported, run the commands in
 [`device-facts.sh`](../../packaging/amtm/device-facts.sh), test boot ordering,
 and complete a 24-hour soak test on real hardware.
