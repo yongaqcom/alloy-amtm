@@ -27,13 +27,31 @@ Use these references when relevant:
 
 ## Git identity
 
-Use this repository-local author identity for commits:
+Derive the repository-local commit identity from the GitHub account
+authenticated by the `github-yongaqcom-token-rw` Bitwarden item. Don't
+hard-code a name or email, and don't use a cached identity from another GitHub
+account.
 
-```text
-YongaQ <311870715+yongaqcom@users.noreply.github.com>
+With an unlocked vault and `BW_SESSION` set, configure the identity before
+committing:
+
+```sh
+github_token=$("$HARNESS_ROOT/scripts/bw-secret" get github-yongaqcom-token-rw)
+github_login=$(GH_TOKEN="$github_token" gh api user --jq .login)
+git_name=$(GH_TOKEN="$github_token" gh api user --jq '.name // .login')
+git_email=$(GH_TOKEN="$github_token" gh api user --jq '.email // ""')
+
+if [ -z "$git_email" ]; then
+  github_id=$(GH_TOKEN="$github_token" gh api user --jq .id)
+  git_email="${github_id}+${github_login}@users.noreply.github.com"
+fi
+
+git config --local user.name "$git_name"
+git config --local user.email "$git_email"
+unset github_token github_login github_id git_name git_email
 ```
 
-Don't use a cached Git identity from another GitHub account.
+Never print the token or store it in Git configuration.
 
 ## Validation
 
