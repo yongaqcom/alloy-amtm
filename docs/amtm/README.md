@@ -90,6 +90,9 @@ Release.
 Maintainers should follow the [upstream release tracking runbook](UPSTREAM.md)
 when importing a new Grafana Alloy release.
 
+See [engineering findings and validation status](FINDINGS.md) for the evidence
+behind the current design and the work that still requires a physical BE88U.
+
 Before declaring another router supported, run the commands in
 [`device-facts.sh`](../../packaging/amtm/device-facts.sh), test boot ordering,
 and complete a 24-hour soak test on real hardware.
