@@ -25,6 +25,16 @@ Use these references when relevant:
 - Initialize the source checkout with `git submodule update --init --recursive`.
 - Keep each change focused on one logical purpose.
 
+## Git identity
+
+Use this repository-local author identity for commits:
+
+```text
+YongaQ <311870715+yongaqcom@users.noreply.github.com>
+```
+
+Don't use a cached Git identity from another GitHub account.
+
 ## Validation
 
 For packaging or workflow changes, run the following checks when the required
